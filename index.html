@@ -1178,13 +1178,13 @@
         }
 
         // ==================== 反馈功能 ====================
+        // ==================== 反馈功能 ====================
         function showFeedbackForm() {
             const product = document.getElementById('productSelect').value || '未选择';
             const material = document.getElementById('materialSelect').value || '未选择';
             const mold = document.getElementById('moldSelect').value || '未选择';
             const machineId = document.getElementById('machineId').textContent;
             
-            // 用户信息部分
             let userInfoHtml = '';
             if (currentUser) {
                 userInfoHtml = `
@@ -1209,16 +1209,11 @@
                 title: '📢 问题反馈',
                 html: `
                     <div style="text-align: left; max-height: 500px; overflow-y: auto;">
-                        <p style="color: #666; margin-bottom: 10px;">
-                            请描述您遇到的问题或建议：
-                        </p>
-                        
+                        <p style="color: #666; margin-bottom: 10px;">请描述您遇到的问题或建议：</p>
                         ${userInfoHtml}
-                        
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">问题类型</label>
-                            <select id="fbType" 
-                                style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:15px;">
+                            <select id="fbType" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:15px;">
                                 <option value="参数不一致">参数不一致</option>
                                 <option value="操作问题">操作问题</option>
                                 <option value="设备故障">设备故障</option>
@@ -1227,68 +1222,26 @@
                                 <option value="其他">其他</option>
                             </select>
                         </div>
-                        
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">问题描述</label>
-                            <textarea id="fbContent" 
-                                placeholder="请详细描述问题现象、发生时间、影响范围等..." 
-                                style="width:100%; min-height:120px; padding:10px; border:1px solid #ddd; border-radius:6px; resize: vertical;"></textarea>
+                            <textarea id="fbContent" placeholder="请详细描述问题现象..." style="width:100%; min-height:120px; padding:10px; border:1px solid #ddd; border-radius:6px; resize: vertical;"></textarea>
                         </div>
-                        
                         <div style="margin-top: 15px;">
-                            <label>
-                                <input type="checkbox" id="fbUrgent" style="margin-right: 5px;">
-                                <strong>紧急问题</strong>（需要24小时内处理）
-                            </label>
-                        </div>
-                        
-                        <div style="background: #fff8e6; padding: 10px; border-radius: 6px; margin-top: 15px; border: 1px solid #ffe58f;">
-                            <p style="margin: 0; font-size: 13px; color: #856404;">
-                                <strong>反馈内容：</strong><br>
-                                产品: ${product}<br>
-                                材料: ${material}<br>
-                                模具: ${mold || '未选择'}<br>
-                                机台: ${machineId}
-                            </p>
+                            <label><input type="checkbox" id="fbUrgent" style="margin-right: 5px;"><strong>紧急问题</strong></label>
                         </div>
                     </div>
                 `,
                 showCancelButton: true,
                 confirmButtonText: '提交反馈',
-                cancelButtonText: '取消',
                 confirmButtonColor: '#ffa940',
-                width: '500px',
                 preConfirm: () => {
                     const userName = currentUser ? currentUser.name : document.getElementById('fbUserName').value;
                     const type = document.getElementById('fbType').value;
                     const content = document.getElementById('fbContent').value;
                     const urgent = document.getElementById('fbUrgent').checked;
-                    
-                    if (!userName && !currentUser) {
-                        Swal.showValidationMessage('请填写您的称呼');
-                        return false;
-                    }
-                    
-                    if (!content.trim()) {
-                        Swal.showValidationMessage('请填写问题描述');
-                        return false;
-                    }
-                    
-                    // 准备反馈数据
-                    return {
-                        product: product,
-                        material: material,
-                        mold: mold,
-                        machineId: machineId,
-                        userName: userName || '匿名',
-                        userDept: currentUser?.dept || '',
-                        userContact: currentUser?.contact || '',
-                        type: type,
-                        content: content,
-                        urgent: urgent,
-                        timestamp: new Date().toISOString(),
-                        pageUrl: window.location.href
-                    };
+                    if (!userName && !currentUser) { Swal.showValidationMessage('请填写您的称呼'); return false; }
+                    if (!content.trim()) { Swal.showValidationMessage('请填写问题描述'); return false; }
+                    return { product, material, mold, machineId, userName: userName || '匿名', userDept: currentUser?.dept || '', type, content, urgent, timestamp: new Date().toISOString(), pageUrl: window.location.href };
                 }
             }).then((result) => {
                 if (result.isConfirmed) {
@@ -1296,124 +1249,43 @@
                 }
             });
         }
-// ==================== 微信推送功能 ====================
+
+        // ==================== 修复后的微信推送和提交函数 ====================
         function pushToWeChat(data) {
             if (!CONFIG.serverChanKey) return;
-
-            // 1. 准备标题
             const title = `${data.urgent ? '🚨紧急' : '📝'}注塑反馈：${data.machineId}`;
-
-            // 2. 准备内容 (Markdown格式)
-            const desp = `
-**提交人员**: ${data.userName} ${data.userDept ? `(${data.userDept})` : ''}
-**提交时间**: ${new Date().toLocaleString()}
-**问题类型**: ${data.type}
-
----
-**生产信息**:
-- 产品: ${data.product}
-- 材料: ${data.material}
-- 模具: ${data.mold}
-
-**详细描述**:
-${data.content}
-
-[点击查看看板](${data.pageUrl})
-            `.trim();
-
-            // 3. 发送请求
-            const url = `https://sctapi.ftqq.com/${CONFIG.serverChanKey}.send`;
+            const desp = `**反馈人**: ${data.userName}\n**类型**: ${data.type}\n**内容**: ${data.content}\n\n[点击查看看板](${data.pageUrl})`;
             
-            // 使用 URLSearchParams 处理参数，避免特殊字符问题
-            const params = new URLSearchParams();
-            params.append('title', title);
-            params.append('desp', desp);
-
-            // 使用 fetch 发送
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: params
-            })
-            .then(response => response.json())
-            .then(res => {
-                console.log('推送结果:', res);
-            })
-            .catch(error => {
-                console.error('推送失败:', error);
-                // 即使推送失败也不要在界面上报错，以免影响用户体验
-            });
+            // 使用简化的 GET 方式，更不容易出错
+            const url = `https://sctapi.ftqq.com/${CONFIG.serverChanKey}.send?title=${encodeURIComponent(title)}&desp=${encodeURIComponent(desp)}`;
+            
+            fetch(url).then(res => res.json()).then(res => console.log('推送状态:', res)).catch(err => console.error('推送失败:', err));
         }
+
         function submitFeedback(feedbackData) {
-            function submitFeedback(feedbackData) {
-            // 更新反馈计数
+            // 1. 计数与保存
             feedbackCount++;
             updateFeedbackCounter();
-            
-            // 保存到本地存储（暂时方案）
             saveFeedbackToLocal(feedbackData);
 
-            // 👇👇👇 就在这里加入这一行 👇👇👇
+            // 2. 触发推送
             pushToWeChat(feedbackData); 
-            // 👆👆👆 加入上面这一行 👆👆👆
             
+            // 3. 成功提示
             Swal.fire({
                 title: '✅ 反馈已提交',
-                html: `
-                    <div style="text-align: center; padding: 20px;">
-            // ... (后面的代码不用动)
-            // 更新反馈计数
-            feedbackCount++;
-            updateFeedbackCounter();
-            
-            // 保存到本地存储（暂时方案）
-            saveFeedbackToLocal(feedbackData);
-            
-            Swal.fire({
-                title: '✅ 反馈已提交',
-                html: `
-                    <div style="text-align: center; padding: 20px;">
-                        <div style="font-size: 48px; color: #00a854; margin-bottom: 15px;">✓</div>
-                        <h3>感谢您的反馈！</h3>
-                        <p style="color: #666; margin-bottom: 15px;">
-                            我们已收到您的问题反馈，会尽快处理。
-                        </p>
-                        <div style="background: #f6ffed; padding: 15px; border-radius: 8px; border: 1px solid #b7eb8f; margin-bottom: 20px;">
-                            <p style="margin: 0; font-size: 13px; color: #389e0d;">
-                                <strong>反馈时间：</strong>${new Date().toLocaleString()}
-                            </p>
-                        </div>
-                        <div style="font-size: 13px; color: #666;">
-                            如果问题紧急，请同时通过其他方式（如电话）通知相关人员。
-                        </div>
-                    </div>
-                `,
-                showConfirmButton: true,
+                text: '感谢您的反馈，微信通知已尝试发送。',
+                icon: 'success',
                 confirmButtonText: '确定'
             });
         }
 
         function saveFeedbackToLocal(feedbackData) {
             try {
-                // 获取现有的反馈
                 let feedbacks = JSON.parse(localStorage.getItem('injection_feedbacks') || '[]');
-                
-                // 添加新反馈
-                feedbacks.push({
-                    ...feedbackData,
-                    id: 'FB' + Date.now(),
-                    status: '待处理'
-                });
-                
-                // 保存回本地存储
+                feedbacks.push({ ...feedbackData, id: 'FB' + Date.now(), status: '待处理' });
                 localStorage.setItem('injection_feedbacks', JSON.stringify(feedbacks));
-                
-                console.log('反馈已保存到本地存储');
-            } catch (e) {
-                console.error('保存反馈失败:', e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         function loadFeedbackCount() {
@@ -1421,9 +1293,7 @@ ${data.content}
                 const feedbacks = JSON.parse(localStorage.getItem('injection_feedbacks') || '[]');
                 feedbackCount = feedbacks.length;
                 updateFeedbackCounter();
-            } catch (e) {
-                console.error('加载反馈计数失败:', e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         function updateFeedbackCounter() {
@@ -1434,10 +1304,8 @@ ${data.content}
             }
         }
 
-        // 全局函数，供按钮调用
         window.showLogin = showLogin;
         window.logout = logout;
     </script>
 </body>
-
 </html>
