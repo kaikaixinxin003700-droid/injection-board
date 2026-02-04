@@ -406,11 +406,11 @@
     <script>
         // ==================== 配置 ====================
         const CONFIG = {
-            // 反馈API地址（暂时留空，后续配置）
-            feedbackApi: '',
-            // Server酱Key（后续配置）
-            serverChanKey: '',
-        };
+    // 反馈API地址（可以留空，我们直接用下面的Key）
+    feedbackApi: '',
+    // Server酱Key
+    serverChanKey: 'SCT312972Tjk8P663lIBdPdOesYvNJpWb3', 
+};
 
         // ==================== 根据Excel模板的数据 ====================
         const processDatabase = {
@@ -1296,8 +1296,74 @@
                 }
             });
         }
+// ==================== 微信推送功能 ====================
+        function pushToWeChat(data) {
+            if (!CONFIG.serverChanKey) return;
 
+            // 1. 准备标题
+            const title = `${data.urgent ? '🚨紧急' : '📝'}注塑反馈：${data.machineId}`;
+
+            // 2. 准备内容 (Markdown格式)
+            const desp = `
+**提交人员**: ${data.userName} ${data.userDept ? `(${data.userDept})` : ''}
+**提交时间**: ${new Date().toLocaleString()}
+**问题类型**: ${data.type}
+
+---
+**生产信息**:
+- 产品: ${data.product}
+- 材料: ${data.material}
+- 模具: ${data.mold}
+
+**详细描述**:
+${data.content}
+
+[点击查看看板](${data.pageUrl})
+            `.trim();
+
+            // 3. 发送请求
+            const url = `https://sctapi.ftqq.com/${CONFIG.serverChanKey}.send`;
+            
+            // 使用 URLSearchParams 处理参数，避免特殊字符问题
+            const params = new URLSearchParams();
+            params.append('title', title);
+            params.append('desp', desp);
+
+            // 使用 fetch 发送
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: params
+            })
+            .then(response => response.json())
+            .then(res => {
+                console.log('推送结果:', res);
+            })
+            .catch(error => {
+                console.error('推送失败:', error);
+                // 即使推送失败也不要在界面上报错，以免影响用户体验
+            });
+        }
         function submitFeedback(feedbackData) {
+            function submitFeedback(feedbackData) {
+            // 更新反馈计数
+            feedbackCount++;
+            updateFeedbackCounter();
+            
+            // 保存到本地存储（暂时方案）
+            saveFeedbackToLocal(feedbackData);
+
+            // 👇👇👇 就在这里加入这一行 👇👇👇
+            pushToWeChat(feedbackData); 
+            // 👆👆👆 加入上面这一行 👆👆👆
+            
+            Swal.fire({
+                title: '✅ 反馈已提交',
+                html: `
+                    <div style="text-align: center; padding: 20px;">
+            // ... (后面的代码不用动)
             // 更新反馈计数
             feedbackCount++;
             updateFeedbackCounter();
@@ -1373,4 +1439,5 @@
         window.logout = logout;
     </script>
 </body>
+
 </html>
