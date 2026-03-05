@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>注塑工艺数字化看板 · 安全版</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <style>
+        /* 样式与之前完全一致，为节省篇幅此处省略，实际使用时保留原样 */
+        :root {
+            --primary: #0052d9;
+            --danger: #d9001b;
+            --success: #00a854;
+            --warning: #ffa940;
+            --bg: #f4f7f6;
+            --border: #e8e8e8;
+            --text: #262626;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            min-height: 100vh;
+            padding: 15px;
+            color: var(--text);
+            -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+            -webkit-touch-callout: none;
+            position: relative;
+        }
+        input, textarea, [contenteditable="true"] { -webkit-user-select: auto !important; -moz-user-select: auto !important; -ms-user-select: auto !important; user-select: auto !important; }
+        .container {
+            max-width: 520px; margin: 0 auto; background: white; border-radius: 16px; padding: 25px;
+            box-shadow: 0 6px 24px rgba(0, 82, 217, 0.12); border: 1px solid rgba(0, 82, 217, 0.1);
+            position: relative; z-index: 2; background-color: rgba(255,255,255,0.98); backdrop-filter: blur(1px);
+        }
+        #watermark-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999;
+            display: flex; flex-wrap: wrap; justify-content: space-around; align-items: center;
+            transform: rotate(-25deg) scale(1.2); opacity: 0.18; font-size: 18px; font-weight: 500;
+            color: #2c3e50; text-transform: uppercase; white-space: nowrap; font-family: monospace; letter-spacing: 2px;
+        }
+        .watermark-item {
+            margin: 30px 20px; padding: 5px 15px; background: transparent; border: 1px dashed rgba(0,82,217,0.2);
+            color: #003a8c; box-shadow: 0 0 0 1px rgba(255,255,255,0.3); border-radius: 40px; backdrop-filter: blur(2px);
+        }
+        .header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #f0f5ff; }
+        h1 { color: var(--primary); font-size: 22px; margin-bottom: 10px; }
+        h1 i { margin-right: 10px; }
+        .machine-info { display: flex; justify-content: center; gap: 10px; align-items: center; margin-top: 10px; }
+        .machine-tag { background: linear-gradient(135deg, var(--primary), #0066ff); color: white; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 8px rgba(0, 82, 217, 0.2); }
+        .status { display: inline-flex; align-items: center; gap: 6px; background: #f0f9ff; color: var(--primary); padding: 4px 12px; border-radius: 15px; font-size: 13px; border: 1px solid #bae0ff; }
+        .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: var(--text); }
+        label i { color: var(--primary); margin-right: 6px; }
+        select {
+            width: 100%; padding: 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 15px;
+            background: white; transition: all 0.3s; cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 15px center; background-size: 16px;
+        }
+        select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0, 82, 217, 0.1); }
+        select:disabled { background-color: #f8f9fa; cursor: not-allowed; opacity: 0.7; }
+        .hint { font-size: 12px; color: #666; margin-top: 5px; display: block; }
+        .btn {
+            width: 100%; padding: 16px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), #0066ff); color: white; box-shadow: 0 4px 14px rgba(0, 82, 217, 0.3); margin-top: 10px; }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 82, 217, 0.4); }
+        .btn-primary:disabled { background: #cce4ff; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-feedback { background: linear-gradient(135deg, #ffa940, #ff7a00); color: white; margin-top: 15px; }
+        .param-section { background: #f8fbff; border-radius: 10px; padding: 20px; margin-top: 20px; border: 1px solid #e8f1ff; display: none; }
+        .param-section.show { display: block; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .section-title { color: var(--primary); font-size: 16px; font-weight: 600; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #e8f1ff; display: flex; align-items: center; gap: 8px; }
+        .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+        .param-item { display: flex; flex-direction: column; }
+        .param-label { font-size: 12px; color: #666; margin-bottom: 4px; }
+        .param-value { background: white; padding: 10px; border-radius: 6px; border: 1px solid var(--border); font-weight: 600; font-size: 14px; }
+        .param-value.important { background: #fff2f0; color: var(--danger); border-color: #ffccc7; }
+        .param-value.warning { background: #fffbe6; color: var(--warning); border-color: #ffe58f; }
+        .param-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 13px; }
+        .param-table th, .param-table td { border: 1px solid var(--border); padding: 10px; text-align: center; }
+        .param-table th { background: #f0f7ff; color: var(--text); font-weight: 600; }
+        .footer { text-align: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--border); font-size: 12px; color: #666; }
+        .user-status { margin-top: 10px; font-size: 13px; }
+        .login-link { color: var(--primary); cursor: pointer; text-decoration: underline; }
+        @media (max-width: 480px) {
+            .container { padding: 20px 15px; border-radius: 12px; }
+            h1 { font-size: 20px; }
+            .param-grid { grid-template-columns: 1fr; gap: 10px; }
+            .param-table { font-size: 12px; }
+            .param-table th, .param-table td { padding: 8px 5px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 防截屏水印层 -->
+    <div id="watermark-layer"></div>
+
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1><i class="fas fa-industry"></i>注塑工艺数字化看板</h1>
+            <div class="machine-info">
+                <span class="machine-tag" id="machineId">加载中...</span>
+                <span class="status">
+                    <span class="status-dot"></span>
+                    在线
+                </span>
+            </div>
+        </div>
+        
+        <!-- 选择区域 -->
+        <div class="form-group">
+            <label><i class="fas fa-cube"></i>1. 选择产品名称</label>
+            <select id="productSelect">
+                <option value="">请选择产品</option>
+            </select>
+            <span class="hint">选择产品后会自动匹配材料</span>
+        </div>
+        
+        <div class="form-group">
+            <label><i class="fas fa-flask"></i>2. 选择材料</label>
+            <select id="materialSelect" disabled>
+                <option value="">请先选择产品</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label><i class="fas fa-tools"></i>3. 选择模具号</label>
+            <select id="moldSelect" disabled>
+                <option value="">请先选择材料</option>
+            </select>
+            <span class="hint">同一产品材料可能有多个模具号</span>
+        </div>
+        
+        <!-- 查看参数按钮 -->
+        <button class="btn btn-primary" id="viewParamsBtn" disabled>
+            <i class="fas fa-search"></i>查看完整工艺参数
+        </button>
+        
+        <!-- 参数展示区域（动态） -->
+        <div class="param-section" id="paramsSection"></div>
+        
+        <!-- 快速反馈按钮 -->
+        <button class="btn btn-feedback" id="feedbackBtn">
+            <i class="fas fa-exclamation-circle"></i>快速问题反馈
+        </button>
+        
+        <!-- 用户状态 -->
+        <div class="user-status" id="userStatus">
+            您正在匿名访问，<span class="login-link" onclick="showLogin()">点击设置个人信息</span>
+        </div>
+        
+        <!-- 底部信息 -->
+        <div class="footer">
+            <div>工艺参数版本: 2024.01 | 最后更新: 2024-01-15</div>
+            <div id="feedbackCounter" style="margin-top: 5px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 配置 ====================
+        const CONFIG = {
+            serverChanKey: 'SCT312972Tjk8P663lIBdPdOesYvNJpWb3', // Server酱 Key
+
+            // ---------- 邮件发送 (EmailJS) 配置 ----------
+            EMAILJS_PUBLIC_KEY: '4CAtRN2LXajU5ZIJg',               // 您的 Public Key
+            EMAILJS_SERVICE_ID: 'service_bd7g28u',                // 您的 Service ID
+            EMAILJS_TEMPLATE_ID: 'template_vhba6lk',              // 您的 Template ID
+            TO_EMAIL: '827919589@qq.com',                         // 收件人 (已在模板中设置)
+        };
+
+        // ==================== 工艺数据库 ====================
+        const processDatabase = {
+            "花篮": {
+                "FR370": {
+                    "Q": { dryingTemp: "110°C", weight: "0.335g", fixedMoldTemp: "45°C", movingMoldTemp: "45°C", tempControlBox: "265°C", moldOpeningEnd: "348", ejectionEnd: "27", nozzle: "275°C", barrel1: "265°C", barrel2: "260°C", barrel3: "260°C", barrel4: "255°C", injection1Speed: "80", injection1Pressure: "150", injection1Position: "10.5", injection2Speed: "50", injection2Pressure: "150", injection2Position: "7", injection3Speed: "20", injection3Pressure: "150", injection3Position: "", holdingEnd: "4.2", holdingPosition: "5.5", holdingTime: "2", holding1Time: "0.5", holding1Speed: "15", holding1Pressure: "20", holding2Time: "", holding2Speed: "", holding2Pressure: "", melting1BackPressure: "5", melting1Speed: "80", melting1Pressure: "40", melting1Position: "7", melting2BackPressure: "5", melting2Speed: "40", melting2Pressure: "80", melting2Position: "10", melting3BackPressure: "5", melting3Speed: "40", melting3Pressure: "80", melting3Position: "17", actualInjectionTime: "0.4", actualCooling: "5", meltingTime: "2" },
+                    "R": { dryingTemp: "110°C", weight: "0.335g", fixedMoldTemp: "45°C", movingMoldTemp: "45°C", tempControlBox: "265°C", moldOpeningEnd: "348", ejectionEnd: "27", nozzle: "275°C", barrel1: "265°C", barrel2: "260°C", barrel3: "260°C", barrel4: "255°C", injection1Speed: "80", injection1Pressure: "150", injection1Position: "10.5", injection2Speed: "50", injection2Pressure: "150", injection2Position: "7", injection3Speed: "20", injection3Pressure: "150", injection3Position: "", holdingEnd: "4.2", holdingPosition: "5.5", holdingTime: "2", holding1Time: "0.5", holding1Speed: "15", holding1Pressure: "20", holding2Time: "", holding2Speed: "", holding2Pressure: "", melting1BackPressure: "5", melting1Speed: "80", melting1Pressure: "40", melting1Position: "7", melting2BackPressure: "5", melting2Speed: "40", melting2Pressure: "80", melting2Position: "10", melting3BackPressure: "5", melting3Speed: "40", melting3Pressure: "80", melting3Position: "17", actualInjectionTime: "0.4", actualCooling: "5", meltingTime: "2" },
+                    "N": { dryingTemp: "110°C", weight: "0.335g", fixedMoldTemp: "45°C", movingMoldTemp: "45°C", tempControlBox: "265°C", moldOpeningEnd: "348", ejectionEnd: "27", nozzle: "275°C", barrel1: "265°C", barrel2: "260°C", barrel3: "260°C", barrel4: "255°C", injection1Speed: "80", injection1Pressure: "150", injection1Position: "10.5", injection2Speed: "50", injection2Pressure: "150", injection2Position: "7", injection3Speed: "20", injection3Pressure: "150", injection3Position: "", holdingEnd: "4.2", holdingPosition: "5.5", holdingTime: "2", holding1Time: "0.5", holding1Speed: "15", holding1Pressure: "20", holding2Time: "", holding2Speed: "", holding2Pressure: "", melting1BackPressure: "5", melting1Speed: "80", melting1Pressure: "40", melting1Position: "7", melting2BackPressure: "5", melting2Speed: "40", melting2Pressure: "80", melting2Position: "10", melting3BackPressure: "5", melting3Speed: "40", melting3Pressure: "80", melting3Position: "17", actualInjectionTime: "0.4", actualCooling: "5", meltingTime: "2" }
+                },
+                "T303-00GF": {
+                    "Q": { dryingTemp: "110°C", weight: "0.335g", fixedMoldTemp: "45°C", movingMoldTemp: "45°C", tempControlBox: "265°C", moldOpeningEnd: "348", ejectionEnd: "27", nozzle: "275°C", barrel1: "265°C", barrel2: "260°C", barrel3: "260°C", barrel4: "255°C", injection1Speed: "80", injection1Pressure: "150", injection1Position: "10.5", injection2Speed: "50", injection2Pressure: "150", injection2Position: "7", injection3Speed: "20", injection3Pressure: "150", injection3Position: "", holdingEnd: "4.2", holdingPosition: "5.5", holdingTime: "2", holding1Time: "0.5", holding1Speed: "15", holding1Pressure: "20", holding2Time: "", holding2Speed: "", holding2Pressure: "", melting1BackPressure: "5", melting1Speed: "80", melting1Pressure: "40", melting1Position: "7", melting2BackPressure: "5", melting2Speed: "40", melting2Pressure: "80", melting2Position: "10", melting3BackPressure: "5", melting3Speed: "40", melting3Pressure: "80", melting3Position: "17", actualInjectionTime: "0.4", actualCooling: "5", meltingTime: "2" },
+                    "R": { dryingTemp: "110°C", weight: "0.335g", fixedMoldTemp: "45°C", movingMoldTemp: "45°C", tempControlBox: "265°C", moldOpeningEnd: "348", ejectionEnd: "27", nozzle: "275°C", barrel1: "265°C", barrel2: "260°C", barrel3: "260°C", barrel4: "255°C", injection1Speed: "80", injection1Pressure: "150", injection1Position: "10.5", injection2Speed: "50", injection2Pressure: "150", injection2Position: "7", injection3Speed: "20", injection3Pressure: "150", injection3Position: "", holdingEnd: "4.2", holdingPosition: "5.5", holdingTime: "2", holding1Time: "0.5", holding1Speed: "15", holding1Pressure: "20", holding2Time: "", holding2Speed: "", holding2Pressure: "", melting1BackPressure: "5", melting1Speed: "80", melting1Pressure: "40", melting1Position: "7", melting2BackPressure: "5", melting2Speed: "40", melting2Pressure: "80", melting2Position: "10", melting3BackPressure: "5", melting3Speed: "40", melting3Pressure: "80", melting3Position: "17", actualInjectionTime: "0.4", actualCooling: "5", meltingTime: "2" },
+                    "N": { dryingTemp: "110°C", weight: "0.335g", fixedMoldTemp: "45°C", movingMoldTemp: "45°C", tempControlBox: "265°C", moldOpeningEnd: "348", ejectionEnd: "27", nozzle: "275°C", barrel1: "265°C", barrel2: "260°C", barrel3: "260°C", barrel4: "255°C", injection1Speed: "80", injection1Pressure: "150", injection1Position: "10.5", injection2Speed: "50", injection2Pressure: "150", injection2Position: "7", injection3Speed: "20", injection3Pressure: "150", injection3Position: "", holdingEnd: "4.2", holdingPosition: "5.5", holdingTime: "2", holding1Time: "0.5", holding1Speed: "15", holding1Pressure: "20", holding2Time: "", holding2Speed: "", holding2Pressure: "", melting1BackPressure: "5", melting1Speed: "80", melting1Pressure: "40", melting1Position: "7", melting2BackPressure: "5", melting2Speed: "40", melting2Pressure: "80", melting2Position: "10", melting3BackPressure: "5", melting3Speed: "40", melting3Pressure: "80", melting3Position: "17", actualInjectionTime: "0.4", actualCooling: "5", meltingTime: "2" }
+                }
+            }
+        };
+
+        // ==================== 全局变量 ====================
+        let currentUser = null;
+        let feedbackCount = 0;
+
+        // ==================== 初始化 ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化 EmailJS
+            if (CONFIG.EMAILJS_PUBLIC_KEY && CONFIG.EMAILJS_PUBLIC_KEY !== '请填写您的EmailJS Public Key') {
+                emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
+            }
+
+            // 机台ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const machineId = urlParams.get('id') || 'A-01号机';
+            document.getElementById('machineId').textContent = machineId;
+
+            loadProducts();
+            
+            document.getElementById('productSelect').addEventListener('change', onProductChange);
+            document.getElementById('materialSelect').addEventListener('change', onMaterialChange);
+            document.getElementById('moldSelect').addEventListener('change', onMoldChange);
+            document.getElementById('viewParamsBtn').addEventListener('click', showParameters);
+            document.getElementById('feedbackBtn').addEventListener('click', showFeedbackForm);
+
+            loadUserInfo();
+            loadFeedbackCount();
+
+            initWatermark(machineId);
+
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('copy', e => e.preventDefault());
+            document.addEventListener('cut', e => e.preventDefault());
+        });
+
+        // ==================== 水印 ====================
+        function initWatermark(machineId) {
+            updateWatermark(machineId);
+            setInterval(() => updateWatermark(machineId), 30000);
+        }
+
+        function updateWatermark(machineId) {
+            const layer = document.getElementById('watermark-layer');
+            if (!layer) return;
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            const dateStr = now.toLocaleDateString('zh-CN');
+            const userName = currentUser ? currentUser.name : '匿名';
+            const baseText = `${machineId} | ${userName} | ${dateStr} ${timeStr}`;
+            let items = '';
+            for (let i = 0; i < 12; i++) {
+                items += `<span class="watermark-item">${baseText}</span>`;
+            }
+            layer.innerHTML = items;
+        }
+
+        function refreshWatermark() {
+            const machineId = document.getElementById('machineId').textContent;
+            updateWatermark(machineId);
+        }
+
+        // ==================== 产品/材料/模具 ====================
+        function loadProducts() {
+            const productSelect = document.getElementById('productSelect');
+            const products = Object.keys(processDatabase);
+            products.forEach(product => {
+                const option = document.createElement('option');
+                option.value = product;
+                option.textContent = product;
+                productSelect.appendChild(option);
+            });
+        }
+
+        function onProductChange() {
+            const product = document.getElementById('productSelect').value;
+            const materialSelect = document.getElementById('materialSelect');
+            const moldSelect = document.getElementById('moldSelect');
+            
+            materialSelect.innerHTML = '<option value="">请选择材料</option>';
+            materialSelect.disabled = !product;
+            moldSelect.innerHTML = '<option value="">请先选择材料</option>';
+            moldSelect.disabled = true;
+            updateViewButton();
+            
+            if (product) {
+                const materials = Object.keys(processDatabase[product]);
+                materials.forEach(material => {
+                    const option = document.createElement('option');
+                    option.value = material;
+                    option.textContent = material;
+                    materialSelect.appendChild(option);
+                });
+            }
+        }
+
+        function onMaterialChange() {
+            const product = document.getElementById('productSelect').value;
+            const material = document.getElementById('materialSelect').value;
+            const moldSelect = document.getElementById('moldSelect');
+            
+            moldSelect.innerHTML = '<option value="">请选择模具号</option>';
+            moldSelect.disabled = !product || !material;
+            updateViewButton();
+            
+            if (product && material) {
+                const molds = Object.keys(processDatabase[product][material]);
+                molds.forEach(mold => {
+                    const option = document.createElement('option');
+                    option.value = mold;
+                    option.textContent = `模具 ${mold}`;
+                    moldSelect.appendChild(option);
+                });
+            }
+        }
+
+        function onMoldChange() {
+            updateViewButton();
+        }
+
+        function updateViewButton() {
+            const product = document.getElementById('productSelect').value;
+            const material = document.getElementById('materialSelect').value;
+            const mold = document.getElementById('moldSelect').value;
+            document.getElementById('viewParamsBtn').disabled = !(product && material && mold);
+        }
+
+        // ==================== 显示参数（增加登录检查）====================
+        function showParameters() {
+            // 强制登录检查
+            if (!currentUser) {
+                Swal.fire({
+                    title: '需要先设置个人信息',
+                    text: '请填写姓名或工号后，才能查看工艺参数',
+                    icon: 'warning',
+                    confirmButtonText: '去设置',
+                    allowOutsideClick: false
+                }).then(() => {
+                    showLogin();
+                });
+                return;
+            }
+
+            const product = document.getElementById('productSelect').value;
+            const material = document.getElementById('materialSelect').value;
+            const mold = document.getElementById('moldSelect').value;
+            if (!product || !material || !mold) {
+                Swal.fire('请选择完整信息', '请选择产品、材料和模具号', 'warning');
+                return;
+            }
+            const params = processDatabase[product][material][mold];
+            let html = `
+                <div class="section-title"><i class="fas fa-info-circle"></i>基础参数 - 模具 ${mold}</div>
+                <div class="param-grid">
+                    <div class="param-item"><div class="param-label">干燥温度</div><div class="param-value">${params.dryingTemp}</div></div>
+                    <div class="param-item"><div class="param-label">产品单重</div><div class="param-value important">${params.weight}</div></div>
+                    <div class="param-item"><div class="param-label">定模温度</div><div class="param-value">${params.fixedMoldTemp}</div></div>
+                    <div class="param-item"><div class="param-label">动模温度</div><div class="param-value">${params.movingMoldTemp}</div></div>
+                    <div class="param-item"><div class="param-label">温控箱温度</div><div class="param-value">${params.tempControlBox}</div></div>
+                    <div class="param-item"><div class="param-label">开模终止位置</div><div class="param-value important">${params.moldOpeningEnd}</div></div>
+                    <div class="param-item"><div class="param-label">顶出终止位置</div><div class="param-value important">${params.ejectionEnd}</div></div>
+                </div>
+                <div class="section-title"><i class="fas fa-thermometer-half"></i>温度参数</div>
+                <table class="param-table"><tr><th>射胶嘴口</th><th>料管一段</th><th>料管二段</th><th>料管三段</th><th>料管四段</th></tr>
+                <tr><td>${params.nozzle}</td><td>${params.barrel1}</td><td>${params.barrel2}</td><td>${params.barrel3}</td><td>${params.barrel4}</td></tr></table>
+                <div class="section-title"><i class="fas fa-tint"></i>射出参数</div>
+                <table class="param-table"><tr><th>阶段</th><th>速度(%)</th><th>压力(bar/kgf)</th><th>位置(mm)</th></tr>
+                <tr><td>一段</td><td>${params.injection1Speed}</td><td>${params.injection1Pressure}</td><td>${params.injection1Position}</td></tr>
+                <tr><td>二段</td><td>${params.injection2Speed}</td><td>${params.injection2Pressure}</td><td>${params.injection2Position}</td></tr>
+                <tr><td>三段</td><td>${params.injection3Speed}</td><td>${params.injection3Pressure}</td><td>${params.injection3Position || '-'}</td></tr></table>
+                <div class="section-title"><i class="fas fa-bolt"></i>保压参数</div>
+                <div class="param-grid"><div class="param-item"><div class="param-label">保压射胶终点</div><div class="param-value">${params.holdingEnd}</div></div>
+                <div class="param-item"><div class="param-label">保压位置</div><div class="param-value">${params.holdingPosition}</div></div>
+                <div class="param-item"><div class="param-label">保压时间</div><div class="param-value important">${params.holdingTime}</div></div></div>
+                <div style="margin-top: 15px; font-size: 13px; color: #666;"><strong>保压第一段：</strong> 时间: ${params.holding1Time} | 速度: ${params.holding1Speed} | 压力: ${params.holding1Pressure}</div>
+                ${params.holding2Time ? `<div style="margin-top: 10px; font-size: 13px; color: #666;"><strong>保压第二段：</strong> 时间: ${params.holding2Time} | 速度: ${params.holding2Speed} | 压力: ${params.holding2Pressure}</div>` : ''}
+                <div class="section-title"><i class="fas fa-recycle"></i>储料段溶胶参数</div>
+                <table class="param-table"><tr><th>阶段</th><th>背压</th><th>速度(%)</th><th>压力</th><th>位置(mm)</th></tr>
+                <tr><td>溶胶1</td><td>${params.melting1BackPressure}</td><td>${params.melting1Speed}</td><td>${params.melting1Pressure}</td><td>${params.melting1Position}</td></tr>
+                <tr><td>溶胶2</td><td>${params.melting2BackPressure}</td><td>${params.melting2Speed}</td><td>${params.melting2Pressure}</td><td>${params.melting2Position}</td></tr>
+                <tr><td>溶胶3</td><td>${params.melting3BackPressure}</td><td>${params.melting3Speed}</td><td>${params.melting3Pressure}</td><td>${params.melting3Position}</td></tr></table>
+                <div class="section-title"><i class="fas fa-chart-line"></i>监控数据</div>
+                <div class="param-grid"><div class="param-item"><div class="param-label">实际射出时间</div><div class="param-value warning">${params.actualInjectionTime}</div></div>
+                <div class="param-item"><div class="param-label">冷却实际</div><div class="param-value warning">${params.actualCooling}</div></div>
+                <div class="param-item"><div class="param-label">溶胶时间</div><div class="param-value warning">${params.meltingTime}</div></div></div>
+                <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e8f1ff;"><div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;"><i class="fas fa-lightbulb" style="color: #0052d9;"></i><strong>提示</strong></div><p style="margin: 0; font-size: 13px; color: #666;">如果发现实际参数与显示不一致，请立即点击"快速问题反馈"按钮报告问题。</p></div>
+            `;
+            document.getElementById('paramsSection').innerHTML = html;
+            document.getElementById('paramsSection').classList.add('show');
+            document.getElementById('paramsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ==================== 用户管理（强制登录）====================
+        function loadUserInfo() {
+            const savedUser = localStorage.getItem('injection_user');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    updateUserStatus();
+                    refreshWatermark();
+                } catch (e) {}
+            } else {
+                // 首次加载，无用户信息，自动弹出登录框（不可取消）
+                setTimeout(() => {
+                    showLogin(true); // true 表示强制首次弹出
+                }, 500);
+            }
+        }
+
+        function showLogin(forceFirst = false) {
+            Swal.fire({
+                title: '设置个人信息',
+                html: `
+                    <div style="text-align: left;">
+                        <p style="color: #666; margin-bottom: 15px;">请填写您的姓名或工号（必填），之后才能查看参数和反馈</p>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">您的姓名/工号 <span style="color: red;">*</span></label>
+                            <input type="text" id="userName" placeholder="如：张三 或 工号001" 
+                                style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">部门/岗位（选填）</label>
+                            <input type="text" id="userDept" placeholder="如：注塑车间、工艺部" 
+                                style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">联系方式（选填）</label>
+                            <input type="text" id="userContact" placeholder="手机号或邮箱" 
+                                style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;">
+                        </div>
+                    </div>
+                `,
+                showCancelButton: !forceFirst,  // 首次强制登录时不允许取消
+                confirmButtonText: '保存信息',
+                cancelButtonText: '暂不设置',
+                allowOutsideClick: false,
+                preConfirm: () => {
+                    const name = document.getElementById('userName').value.trim();
+                    if (!name) {
+                        Swal.showValidationMessage('姓名或工号不能为空');
+                        return false;
+                    }
+                    const dept = document.getElementById('userDept').value.trim();
+                    const contact = document.getElementById('userContact').value.trim();
+                    return { name, dept, contact };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    localStorage.setItem('injection_user', JSON.stringify(result.value));
+                    currentUser = result.value;
+                    updateUserStatus();
+                    refreshWatermark();
+                    Swal.fire({ title: '✅ 信息已保存', icon: 'success', timer: 1500, showConfirmButton: false });
+                } else if (forceFirst) {
+                    // 强制登录时如果点击取消，再次弹出（实际上没有取消按钮）
+                    // 但为了安全，如果由于某些原因取消了，重新弹出
+                    showLogin(true);
+                }
+            });
+        }
+
+        function updateUserStatus() {
+            const userStatusDiv = document.getElementById('userStatus');
+            if (currentUser) {
+                userStatusDiv.innerHTML = `<div style="display: inline-flex; align-items: center; gap: 8px; background: #f0f9ff; padding: 6px 12px; border-radius: 16px;"><div style="width: 24px; height: 24px; border-radius: 50%; background: #0052d9; color: white; display: flex; align-items: center; justify-content: center; font-size: 12px;">${currentUser.name.charAt(0)}</div><span>${currentUser.name}</span><button onclick="logout()" style="background: none; border: none; color: #999; font-size: 12px; cursor: pointer;">退出</button></div>`;
+            } else {
+                userStatusDiv.innerHTML = `您尚未设置个人信息，<span class="login-link" onclick="showLogin()">点击立即设置</span>`;
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('injection_user');
+            currentUser = null;
+            updateUserStatus();
+            refreshWatermark();
+            // 退出后再次强制登录
+            showLogin(true);
+        }
+
+        // ==================== 反馈（增加登录检查）====================
+        function showFeedbackForm() {
+            // 强制登录检查
+            if (!currentUser) {
+                Swal.fire({
+                    title: '需要先设置个人信息',
+                    text: '请填写姓名或工号后，才能提交反馈',
+                    icon: 'warning',
+                    confirmButtonText: '去设置',
+                    allowOutsideClick: false
+                }).then(() => {
+                    showLogin();
+                });
+                return;
+            }
+
+            const product = document.getElementById('productSelect').value || '未选择';
+            const material = document.getElementById('materialSelect').value || '未选择';
+            const mold = document.getElementById('moldSelect').value || '未选择';
+            const machineId = document.getElementById('machineId').textContent;
+            
+            // 已登录，直接显示反馈表单，不再显示称呼输入框
+            let userInfoHtml = `<div style="background: #f0f9ff; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #bae0ff;"><p style="margin: 0; font-size: 14px; color: #0066cc;"><strong>反馈人：</strong>${currentUser.name}${currentUser.dept ? `(${currentUser.dept})` : ''}</p></div>`;
+            
+            Swal.fire({
+                title: '📢 问题反馈',
+                html: `<div style="text-align: left; max-height: 500px; overflow-y: auto;">${userInfoHtml}<div style="margin-bottom: 15px;"><label style="display: block; margin-bottom: 5px; font-weight: 600;">问题类型</label><select id="fbType" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:15px;"><option value="参数不一致">参数不一致</option><option value="操作问题">操作问题</option><option value="设备故障">设备故障</option><option value="材料问题">材料问题</option><option value="改进建议">改进建议</option><option value="其他">其他</option></select></div><div style="margin-bottom: 15px;"><label style="display: block; margin-bottom: 5px; font-weight: 600;">问题描述</label><textarea id="fbContent" placeholder="请详细描述问题现象..." style="width:100%; min-height:120px; padding:10px; border:1px solid #ddd; border-radius:6px; resize: vertical;"></textarea></div><div style="margin-top: 15px;"><label><input type="checkbox" id="fbUrgent" style="margin-right: 5px;"><strong>紧急问题</strong></label></div></div>`,
+                showCancelButton: true,
+                confirmButtonText: '提交反馈',
+                confirmButtonColor: '#ffa940',
+                preConfirm: () => {
+                    const type = document.getElementById('fbType').value;
+                    const content = document.getElementById('fbContent').value;
+                    const urgent = document.getElementById('fbUrgent').checked;
+                    if (!content.trim()) { Swal.showValidationMessage('请填写问题描述'); return false; }
+                    return { 
+                        product, material, mold, machineId, 
+                        user_name: currentUser.name, 
+                        user_dept: currentUser.dept || '', 
+                        type, content, urgent, 
+                        timestamp: new Date().toISOString(), 
+                        page_url: window.location.href 
+                    };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    submitFeedback(result.value);
+                }
+            });
+        }
+
+        function submitFeedback(feedbackData) {
+            feedbackCount++;
+            updateFeedbackCounter();
+            saveFeedbackToLocal(feedbackData);
+
+            // 1. 微信推送
+            pushToWeChat(feedbackData);
+
+            // 2. 发送邮件 (EmailJS)
+            if (CONFIG.EMAILJS_PUBLIC_KEY && CONFIG.EMAILJS_PUBLIC_KEY !== '请填写您的EmailJS Public Key') {
+                sendEmailViaEmailJS(feedbackData);
+            } else {
+                console.warn('EmailJS Public Key 未配置，邮件未发送');
+                Swal.fire({ title: '邮件未发送', text: '管理员尚未配置邮件服务，但微信推送已发出', icon: 'info', confirmButtonText: '知道了' });
+            }
+
+            Swal.fire({
+                title: '✅ 反馈已提交',
+                text: '感谢您的反馈，微信通知已尝试发送。',
+                icon: 'success',
+                confirmButtonText: '确定'
+            });
+        }
+
+        function pushToWeChat(data) {
+            if (!CONFIG.serverChanKey) return;
+            const title = `${data.urgent ? '🚨紧急' : '📝'}注塑反馈：${data.machineId}`;
+            const desp = `**反馈人**: ${data.user_name}\n**类型**: ${data.type}\n**内容**: ${data.content}\n\n[点击查看看板](${data.page_url})`;
+            const url = `https://sctapi.ftqq.com/${CONFIG.serverChanKey}.send?title=${encodeURIComponent(title)}&desp=${encodeURIComponent(desp)}`;
+            fetch(url).catch(err => console.error('推送失败:', err));
+        }
+
+        function sendEmailViaEmailJS(data) {
+            const templateParams = {
+                machine_id: data.machineId,
+                product: data.product,
+                material: data.material,
+                mold: data.mold,
+                user_name: data.user_name,
+                user_dept: data.user_dept,
+                type: data.type,
+                content: data.content,
+                urgent: data.urgent,
+                time: new Date(data.timestamp).toLocaleString('zh-CN'),
+                page_url: data.page_url,
+            };
+            emailjs.send(CONFIG.EMAILJS_SERVICE_ID, CONFIG.EMAILJS_TEMPLATE_ID, templateParams)
+                .then(response => console.log('邮件发送成功', response))
+                .catch(error => {
+                    console.error('邮件发送失败', error);
+                    Swal.fire({ title: '邮件发送失败', text: '但微信推送可能成功', icon: 'warning' });
+                });
+        }
+
+        function saveFeedbackToLocal(feedbackData) {
+            try {
+                let feedbacks = JSON.parse(localStorage.getItem('injection_feedbacks') || '[]');
+                feedbacks.push({ ...feedbackData, id: 'FB' + Date.now(), status: '待处理' });
+                localStorage.setItem('injection_feedbacks', JSON.stringify(feedbacks));
+            } catch (e) {}
+        }
+
+        function loadFeedbackCount() {
+            try {
+                const feedbacks = JSON.parse(localStorage.getItem('injection_feedbacks') || '[]');
+                feedbackCount = feedbacks.length;
+                updateFeedbackCounter();
+            } catch (e) {}
+        }
+
+        function updateFeedbackCounter() {
+            const counter = document.getElementById('feedbackCounter');
+            if (feedbackCount > 0) {
+                counter.innerHTML = `本机累计反馈: <strong>${feedbackCount}</strong> 条`;
+                counter.style.color = '#ffa940';
+            }
+        }
+
+        window.showLogin = showLogin;
+        window.logout = logout;
+    </script>
+</body>
+</html>
